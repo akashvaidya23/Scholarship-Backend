@@ -6,6 +6,7 @@ const {
   handleCreateUser,
   login,
   createAdminUser,
+  getUserDetails,
 } = require("../controllers/userController");
 
 const router = express.Router();
@@ -20,4 +21,5 @@ router.route("/api/login").post(login);
 
 router.route("/api/user/admin").get(createAdminUser);
 
+router.route("/api/users/details/:id").get(getUserDetails);
 module.exports = router;

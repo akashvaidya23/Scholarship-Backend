@@ -2,12 +2,61 @@ const User = require("../models/User");
 const bcrypt = require("bcrypt");
 const connection = require("../mySql");
 
+/*************  ✨ Codeium Command ⭐  *************/
+/**
+ * Handles GET /api/users
+ * Retrieves all users from the database
+ * @param {Object} req - Express request object
+ * @param {Object} resp - Express response object
+ * @returns {Promise<void>}
+ */
+
+/******  aa49ec81-c45b-44ec-99e7-5e1a195cefd0  *******/
 const handleGetAllUsers = async (req, resp) => {
+  let role = req.query.role; // Get the role query parameter
+  console.log(role);
+
   connection.beginTransaction((err) => {
     if (err) {
       return resp.status(500).json({ error: "Transaction start error" });
     }
-    connection.query("SELECT * FROM users", (err, result) => {
+
+    // Build the query dynamically based on the presence of the role parameter
+    let query = "SELECT * FROM users";
+    let queryParams = [];
+
+    if (role) {
+      query += " WHERE role = ?";
+      queryParams.push(role);
+    }
+    query += " WHERE role != 'admin'";
+    queryParams.push(role);
+
+    connection.query(query, queryParams, (err, result) => {
+      if (err) {
+        return connection.rollback(() => {
+          return resp.status(500).json({ error: "Query execution error" });
+        });
+      }
+
+      connection.commit((err) => {
+        if (err) {
+          return connection.rollback(() => {
+            return resp.status(500).json({ error: "Transaction commit error" });
+          });
+        }
+        return resp.status(200).json(result);
+      });
+    });
+  });
+};
+
+const getUserDetails = async (req, resp) => {
+  connection.beginTransaction((err) => {
+    if (err) {
+      return resp.status(500).json({ error: "Transaction start error" });
+    }
+    connection.query("SELECT * FROM users where id = ?", id, (err, result) => {
       if (err) {
         return connection.rollback(() => {
           return resp.status(500).json({ error: "Query execution error" });
@@ -25,6 +74,13 @@ const handleGetAllUsers = async (req, resp) => {
   });
 };
 
+/**
+ * Handles POST /api/users
+ * Creates a new user in the database
+ * @param {Object} req - Express request object
+ * @param {Object} resp - Express response object
+ * @returns {Promise<void>}
+ */
 const handleCreateUser = async (req, resp) => {
   let data = req.body;
   let hashedPassword = await bcrypt.hash(data.password, 10);
@@ -39,38 +95,52 @@ const handleCreateUser = async (req, resp) => {
     }
 
     try {
-      connection.query(
-        "INSERT INTO users SET ?",
-        data,
-        (err, result, fields) => {
-          if (err) {
-            return connection.rollback(() => {
-              if (err.code === "ER_DUP_ENTRY") {
-                return resp
-                  .status(400)
-                  .json({ status: false, message: "User already exists" });
-              }
-              console.log(err);
+      connection.query("INSERT INTO users SET ?", data, (err, result) => {
+        if (err) {
+          return connection.rollback(() => {
+            if (err.code === "ER_DUP_ENTRY") {
               return resp
-                .status(500)
-                .json({ status: false, message: "Error in saving user" });
-            });
-          }
+                .status(400)
+                .json({ status: false, message: "User already exists" });
+            }
+            console.log(err);
+            return resp
+              .status(500)
+              .json({ status: false, message: "Error in saving user" });
+          });
+        }
 
-          connection.commit((err) => {
+        // Fetch the newly registered user data
+        connection.query(
+          "SELECT * FROM users WHERE id = ?",
+          [result.insertId],
+          (err, rows) => {
             if (err) {
               return connection.rollback(() => {
                 console.log(err);
                 return resp.status(500).json({
                   status: false,
-                  message: "Error committing transaction",
+                  message: "Error fetching user data",
                 });
               });
             }
-            resp.status(201).json({ status: true, user: result });
-          });
-        }
-      );
+
+            connection.commit((err) => {
+              if (err) {
+                return connection.rollback(() => {
+                  console.log(err);
+                  return resp.status(500).json({
+                    status: false,
+                    message: "Error committing transaction",
+                  });
+                });
+              }
+              const { password, ...userData } = rows[0];
+              resp.status(201).json({ status: true, user: userData });
+            });
+          }
+        );
+      });
     } catch (err) {
       connection.rollback(() => {
         resp
@@ -81,6 +151,13 @@ const handleCreateUser = async (req, resp) => {
   });
 };
 
+/**
+ * Handles POST /api/login
+ * Logs in an existing user
+ * @param {Object} req - Express request object
+ * @param {Object} resp - Express response object
+ * @returns {Promise<void>}
+ */
 const login = async (req, resp) => {
   const { username, password, role } = req.body;
   connection.beginTransaction((err) => {
@@ -138,6 +215,13 @@ const login = async (req, resp) => {
   });
 };
 
+/**
+ * Handles GET /api/user/admin
+ * Creates a new admin user in the database
+ * @param {Object} req - Express request object
+ * @param {Object} resp - Express response object
+ * @returns {Promise<void>}
+ */
 const createAdminUser = async (req, resp) => {
   try {
     const hashedPassword = await bcrypt.hash("Admin@123", 10);
@@ -175,4 +259,5 @@ module.exports = {
   handleCreateUser,
   login,
   createAdminUser,
+  getUserDetails,
 };
