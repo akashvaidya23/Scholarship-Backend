@@ -1,12 +1,11 @@
 const express = require("express");
-const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 const cors = require("cors");
 const PORT = 8080;
 const User = require("./models/User");
 const { connectMongoDB } = require("./mongoose");
 const userRouter = require("./routes/userRouter");
-
+const connection = require("./mySql");
 const app = express();
 
 // Server Starting
@@ -19,13 +18,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 // MongoDB connection
-connectMongoDB("mongodb://127.0.0.1:27017/students-scholarship")
-  .then(() => {
-    console.log("Mongo Connected successfully");
-  })
-  .catch((err) => {
-    console.log("Mongo Connection failed ", err);
-  });
+// connectMongoDB("mongodb://127.0.0.1:27017/students-scholarship")
+//   .then(() => {
+//     console.log("Mongo Connected successfully");
+//   })
+//   .catch((err) => {
+//     console.log("Mongo Connection failed ", err);
+//   });
 
 // Routes for CORS
 app.use(

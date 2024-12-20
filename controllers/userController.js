@@ -1,77 +1,141 @@
 const User = require("../models/User");
 const bcrypt = require("bcrypt");
+const connection = require("../mySql");
 
 const handleGetAllUsers = async (req, resp) => {
-  const users = await User.find({}).lean();
-  resp.json(users);
+  connection.beginTransaction((err) => {
+    if (err) {
+      return resp.status(500).json({ error: "Transaction start error" });
+    }
+    connection.query("SELECT * FROM users", (err, result) => {
+      if (err) {
+        return connection.rollback(() => {
+          return resp.status(500).json({ error: "Query execution error" });
+        });
+      }
+      connection.commit((err) => {
+        if (err) {
+          return connection.rollback(() => {
+            return resp.status(500).json({ error: "Transaction commit error" });
+          });
+        }
+        return resp.status(200).json(result);
+      });
+    });
+  });
 };
 
 const handleCreateUser = async (req, resp) => {
-  const input = req.body;
-  const existingUser = await User.findOne({
-    $or: [
-      { email: input.email },
-      { mobileNo: input.mobileNo },
-      { userName: input.userName },
-    ],
-  });
-  if (existingUser) {
-    if (existingUser.role === input.role) {
-      return resp.status(400).json({
-        status: false,
-        message: `User already exists with the same email, mobile number, or username and role ${existingUser.role}.`,
+  let data = req.body;
+  let hashedPassword = await bcrypt.hash(data.password, 10);
+  data = { ...data, password: hashedPassword };
+
+  connection.beginTransaction(async (err) => {
+    if (err) {
+      console.log(err);
+      return resp
+        .status(500)
+        .json({ status: false, message: "Error starting transaction" });
+    }
+
+    try {
+      connection.query(
+        "INSERT INTO users SET ?",
+        data,
+        (err, result, fields) => {
+          if (err) {
+            return connection.rollback(() => {
+              if (err.code === "ER_DUP_ENTRY") {
+                return resp
+                  .status(400)
+                  .json({ status: false, message: "User already exists" });
+              }
+              console.log(err);
+              return resp
+                .status(500)
+                .json({ status: false, message: "Error in saving user" });
+            });
+          }
+
+          connection.commit((err) => {
+            if (err) {
+              return connection.rollback(() => {
+                console.log(err);
+                return resp.status(500).json({
+                  status: false,
+                  message: "Error committing transaction",
+                });
+              });
+            }
+            resp.status(201).json({ status: true, user: result });
+          });
+        }
+      );
+    } catch (err) {
+      connection.rollback(() => {
+        resp
+          .status(500)
+          .json({ status: false, message: "Error in saving user" });
       });
     }
-    let message = "User  already exists with: ";
-    if (existingUser.email == input.email) {
-      message += `email ${existingUser.email}, `;
-    }
-    if (existingUser.mobileNo == input.mobileNo) {
-      message += `mobile number ${existingUser.mobileNo}, `;
-    }
-    if (existingUser.userName == input.userName) {
-      message += `username ${existingUser.userName}`;
-    }
-    message = message.replace(/, $/, "");
-
-    return resp.status(400).json({
-      status: false,
-      message: message,
-    });
-  }
-  const hashedPassword = await bcrypt.hash(input.password, 10);
-  const newInput = { ...input, password: hashedPassword };
-  const result = await User.create(newInput);
-  const { password, ...userData } = result.toObject();
-  try {
-    resp.status(201).json({
-      status: true,
-      user: userData,
-      message: "User ceated successfully",
-    });
-  } catch (err) {
-    console.log("Error in saving user ", err);
-    resp.status(500).json({ status: false, message: "Error in saving user" });
-  }
+  });
 };
 
 const login = async (req, resp) => {
-  const input = req.body;
-  console.log(input);
+  const { username, password, role } = req.body;
+  connection.beginTransaction((err) => {
+    if (err) {
+      return resp.status(500).json({ error: "Failed to start transaction" });
+    }
+    const query = "SELECT * FROM users WHERE username = ? AND role = ?";
+    connection.query(query, [username, role], (err, results) => {
+      if (err) {
+        return connection.rollback(() => {
+          return resp.status(500).json({ error: "Database error" });
+        });
+      }
+      if (results.length === 0) {
+        return connection.rollback(() => {
+          return resp
+            .status(401)
+            .json({ status: false, message: "User not found" });
+        });
+      }
+      const user = results[0];
+      bcrypt.compare(password, user.password, (err, isMatch) => {
+        if (err) {
+          return connection.rollback(() => {
+            return resp
+              .status(500)
+              .json({ status: false, error: "Something went wrong" });
+          });
+        }
 
-  const user = await User.findOne({
-    userName: input.username,
-    role: input.role,
+        if (!isMatch) {
+          return connection.rollback(() => {
+            return resp
+              .status(401)
+              .json({ status: false, error: "Invalid credentials" });
+          });
+        }
+
+        connection.commit((err) => {
+          if (err) {
+            return connection.rollback(() => {
+              console.log("Commit failed:", err);
+              return resp.status(500).json({ error: "Commit failed" });
+            });
+          }
+
+          const { password, ...userData } = user;
+          return resp.status(200).json({
+            status: true,
+            user: userData,
+          });
+        });
+      });
+    });
   });
-  if (!user) {
-    return resp.json({ status: false, message: "User not found" });
-  }
-  const isPasswordValid = await bcrypt.compare(input.password, user.password);
-  if (!isPasswordValid) {
-    return resp.json({ status: false, message: "Invalid password" });
-  }
-  const { password, ...userData } = user.toObject();
-  return resp.json({ status: true, user: userData });
 };
 
 const createAdminUser = async (req, resp) => {
@@ -80,14 +144,26 @@ const createAdminUser = async (req, resp) => {
     const newInput = {
       name: "Admin",
       email: "admin@gmail.com",
-      mobileNo: "1234568753",
-      userName: "admin",
+      mobile_no: "1234568753",
+      username: "admin",
       role: "admin",
       password: hashedPassword,
     };
-    const result = await User.create(newInput);
-    const { password, ...userData } = result.toObject();
-    return resp.json({ status: true, user: userData });
+    connection.query(
+      "INSERT into users SET ?",
+      newInput,
+      (err, result, fields) => {
+        if (err) {
+          console.log("Admin error ", err);
+
+          return resp.status(400).json({
+            status: false,
+            message: "Error in saving admin",
+          });
+        }
+        resp.status(201).json({ status: true, user: result });
+      }
+    );
   } catch (err) {
     console.log(err);
     resp.status(500).json({ status: false, message: "Error in saving admin" });

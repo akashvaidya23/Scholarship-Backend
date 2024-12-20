@@ -14,6 +14,7 @@
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "mongoose": "^8.8.4",
+    "mysql": "github:mysqljs/mysql",
     "nodemon": "^3.1.7"
   }
 }
