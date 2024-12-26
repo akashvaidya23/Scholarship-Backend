@@ -2,7 +2,6 @@ const User = require("../models/User");
 const bcrypt = require("bcrypt");
 const connection = require("../mySql");
 
-/*************  ✨ Codeium Command ⭐  *************/
 /**
  * Handles GET /api/users
  * Retrieves all users from the database
@@ -11,17 +10,14 @@ const connection = require("../mySql");
  * @returns {Promise<void>}
  */
 
-/******  aa49ec81-c45b-44ec-99e7-5e1a195cefd0  *******/
 const handleGetAllUsers = async (req, resp) => {
-  let role = req.query.role; // Get the role query parameter
-  console.log(role);
+  let role = req.query.role;
 
   connection.beginTransaction((err) => {
     if (err) {
       return resp.status(500).json({ error: "Transaction start error" });
     }
 
-    // Build the query dynamically based on the presence of the role parameter
     let query = "SELECT * FROM users";
     let queryParams = [];
 
@@ -29,8 +25,6 @@ const handleGetAllUsers = async (req, resp) => {
       query += " WHERE role = ?";
       queryParams.push(role);
     }
-    query += " WHERE role != 'admin'";
-    queryParams.push(role);
 
     connection.query(query, queryParams, (err, result) => {
       if (err) {
@@ -51,26 +45,41 @@ const handleGetAllUsers = async (req, resp) => {
   });
 };
 
+/**
+ * Handles GET /api/users/details/:id
+ * Retrieves a user's details given the ID
+ * @param {Object} req - Express request object
+ * @param {Object} resp - Express response object
+ * @returns {Promise<void>}
+ */
+
 const getUserDetails = async (req, resp) => {
+  const id = req.params.id;
   connection.beginTransaction((err) => {
     if (err) {
       return resp.status(500).json({ error: "Transaction start error" });
     }
-    connection.query("SELECT * FROM users where id = ?", id, (err, result) => {
-      if (err) {
-        return connection.rollback(() => {
-          return resp.status(500).json({ error: "Query execution error" });
-        });
-      }
-      connection.commit((err) => {
+    connection.query(
+      "SELECT id, name, aadhar, pan, email, mobile_no, username, role, department, year, gpa, skills, interests, achievements, created_at, updated_at FROM users where id = ?",
+      id,
+      (err, result) => {
         if (err) {
           return connection.rollback(() => {
-            return resp.status(500).json({ error: "Transaction commit error" });
+            return resp.status(500).json({ error: "Query execution error" });
           });
         }
-        return resp.status(200).json(result);
-      });
-    });
+        connection.commit((err) => {
+          if (err) {
+            return connection.rollback(() => {
+              return resp
+                .status(500)
+                .json({ error: "Transaction commit error" });
+            });
+          }
+          return resp.status(200).json(result);
+        });
+      }
+    );
   });
 };
 
@@ -160,59 +169,43 @@ const handleCreateUser = async (req, resp) => {
  */
 const login = async (req, resp) => {
   const { username, password, role } = req.body;
-  connection.beginTransaction((err) => {
-    if (err) {
-      return resp.status(500).json({ error: "Failed to start transaction" });
-    }
+  try {
     const query = "SELECT * FROM users WHERE username = ? AND role = ?";
-    connection.query(query, [username, role], (err, results) => {
+    connection.query(query, [username, role], async (err, results) => {
       if (err) {
-        return connection.rollback(() => {
-          return resp.status(500).json({ error: "Database error" });
-        });
+        return resp
+          .status(500)
+          .json({ status: false, error: "Database error" });
       }
+
       if (results.length === 0) {
-        return connection.rollback(() => {
-          return resp
-            .status(401)
-            .json({ status: false, message: "User not found" });
-        });
+        return resp
+          .status(401)
+          .json({ status: false, message: "User not found" });
       }
+
       const user = results[0];
-      bcrypt.compare(password, user.password, (err, isMatch) => {
-        if (err) {
-          return connection.rollback(() => {
-            return resp
-              .status(500)
-              .json({ status: false, error: "Something went wrong" });
-          });
-        }
 
-        if (!isMatch) {
-          return connection.rollback(() => {
-            return resp
-              .status(401)
-              .json({ status: false, error: "Invalid credentials" });
-          });
-        }
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) {
+        return resp
+          .status(401)
+          .json({ status: false, error: "Invalid credentials" });
+      }
 
-        connection.commit((err) => {
-          if (err) {
-            return connection.rollback(() => {
-              console.log("Commit failed:", err);
-              return resp.status(500).json({ error: "Commit failed" });
-            });
-          }
-
-          const { password, ...userData } = user;
-          return resp.status(200).json({
-            status: true,
-            user: userData,
-          });
-        });
+      let { password: _password, ...userData } = user;
+      console.log("results ", userData);
+      return resp.status(200).json({
+        status: true,
+        user: userData,
       });
     });
-  });
+  } catch (error) {
+    console.error("error ", error.message);
+    return resp
+      .status(500)
+      .json({ status: false, error: "Something went wrong" });
+  }
 };
 
 /**
@@ -254,10 +247,205 @@ const createAdminUser = async (req, resp) => {
   }
 };
 
+const updateUser = async (req, resp) => {
+  const { id } = req.params;
+  console.log(req.params, id);
+  const { password, ...otherFields } = req.body;
+  let updatedData = { ...otherFields };
+
+  try {
+    if (password) {
+      const hashedPassword = await bcrypt.hash(password, 10);
+      updatedData = { ...updatedData, password: hashedPassword };
+    }
+    console.log("updatedData ", updatedData, id);
+
+    connection.beginTransaction(async (err) => {
+      if (err) {
+        console.log(err);
+        return resp
+          .status(500)
+          .json({ status: false, message: "Error starting transaction" });
+      }
+
+      try {
+        connection.query(
+          "UPDATE users SET ? WHERE id = ?",
+          [updatedData, id],
+          (updateErr, result) => {
+            if (updateErr) {
+              return connection.rollback(() => {
+                if (updateErr.code === "ER_DUP_ENTRY") {
+                  return resp
+                    .status(400)
+                    .json({ status: false, message: "User already exists" });
+                }
+                console.log(updateErr);
+                return resp
+                  .status(500)
+                  .json({ status: false, message: "Error updating user" });
+              });
+            }
+
+            console.log("result ", result);
+
+            if (result.affectedRows === 0) {
+              return connection.rollback(() => {
+                resp.status(400).json({
+                  status: false,
+                  message: "User not found",
+                });
+              });
+            }
+
+            // Fetch the updated user
+            connection.query(
+              "SELECT * FROM users WHERE id = ?",
+              [id],
+              (selectErr, rows) => {
+                if (selectErr) {
+                  return connection.rollback(() => {
+                    console.log(selectErr);
+                    return resp.status(500).json({
+                      status: false,
+                      message: "Error fetching user data",
+                    });
+                  });
+                }
+
+                connection.commit((commitErr) => {
+                  if (commitErr) {
+                    return connection.rollback(() => {
+                      console.log(commitErr);
+                      return resp.status(500).json({
+                        status: false,
+                        message: "Error committing transaction",
+                      });
+                    });
+                  }
+
+                  const { password, ...userData } = rows[0]; // Exclude the password from response
+                  resp.status(200).json({ status: true, user: userData });
+                });
+              }
+            );
+          }
+        );
+      } catch (innerErr) {
+        console.log(innerErr);
+        connection.rollback(() => {
+          resp.status(500).json({
+            status: false,
+            message: "Error updating user",
+          });
+        });
+      }
+    });
+  } catch (err) {
+    console.log(err);
+    resp.status(500).json({
+      status: false,
+      message: "Server error",
+    });
+  }
+};
+
+const deleteUser = async (req, resp) => {
+  const { id } = req.params;
+  if (!id) {
+    return resp
+      .status(400)
+      .json({ status: false, message: "User ID is required" });
+  }
+
+  try {
+    connection.beginTransaction((err) => {
+      if (err) {
+        console.log(err);
+        return resp
+          .status(500)
+          .json({ status: false, message: "Error starting transaction" });
+      }
+
+      connection.query(
+        "SELECT * FROM users WHERE id = ?",
+        [id],
+        (selectErr, rows) => {
+          if (selectErr) {
+            return connection.rollback(() => {
+              console.log(selectErr);
+              return resp.status(500).json({
+                status: false,
+                message: "Error checking user existence",
+              });
+            });
+          }
+
+          if (rows.length === 0) {
+            return connection.rollback(() => {
+              resp
+                .status(404)
+                .json({ status: false, message: "User not found" });
+            });
+          }
+
+          connection.query(
+            "DELETE FROM users WHERE id = ?",
+            [id],
+            (deleteErr, result) => {
+              if (deleteErr) {
+                return connection.rollback(() => {
+                  console.log(deleteErr);
+                  return resp
+                    .status(500)
+                    .json({ status: false, message: "Error deleting user" });
+                });
+              }
+
+              if (result.affectedRows === 0) {
+                return connection.rollback(() => {
+                  resp
+                    .status(404)
+                    .json({ status: false, message: "User not found" });
+                });
+              }
+
+              connection.commit((commitErr) => {
+                if (commitErr) {
+                  return connection.rollback(() => {
+                    console.log(commitErr);
+                    return resp.status(500).json({
+                      status: false,
+                      message: "Error committing transaction",
+                    });
+                  });
+                }
+
+                resp.status(200).json({
+                  status: true,
+                  message: "User deleted successfully",
+                });
+              });
+            }
+          );
+        }
+      );
+    });
+  } catch (err) {
+    console.log(err);
+    resp.status(500).json({
+      status: false,
+      message: "Server error",
+    });
+  }
+};
+
 module.exports = {
   handleGetAllUsers,
   handleCreateUser,
   login,
   createAdminUser,
   getUserDetails,
+  updateUser,
+  deleteUser,
 };

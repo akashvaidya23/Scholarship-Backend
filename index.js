@@ -29,13 +29,13 @@ app.use(express.urlencoded({ extended: false }));
 // Routes for CORS
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://localhost:8080"],
+    origin: [`http://localhost:5174`, "http://localhost:8080"],
   })
 );
 
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://localhost:8080/"],
+    origin: ["http://localhost:5174", "http://localhost:8080/"],
     methods: ["GET", "POST"],
     credentials: true,
   })
