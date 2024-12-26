@@ -10,6 +10,13 @@ const connection = require("../mySql");
  * @returns {Promise<void>}
  */
 
+/**
+ * Handles GET /api/users
+ * Retrieves all users from the database based on the given role
+ * @param {Object} req - Express request object
+ * @param {Object} resp - Express response object
+ * @returns {Promise<void>}
+ */
 const handleGetAllUsers = async (req, resp) => {
   let role = req.query.role;
 
