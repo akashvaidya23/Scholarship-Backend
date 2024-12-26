@@ -26,6 +26,6 @@ router.route("/api/user/admin").get(createAdminUser);
 router
   .route("/api/users/:id")
   .get(getUserDetails)
-  .put(updateUser)
+  .patch(updateUser)
   .delete(deleteUser);
 module.exports = router;
