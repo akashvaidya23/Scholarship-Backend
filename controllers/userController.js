@@ -1,5 +1,5 @@
 const User = require("../models/User");
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 const connection = require("../mySql");
 
 /**
@@ -197,7 +197,7 @@ const login = async (req, resp) => {
       if (!isMatch) {
         return resp
           .status(401)
-          .json({ status: false, error: "Invalid credentials" });
+          .json({ status: false, message: "Invalid credentials" });
       }
 
       let { password: _password, ...userData } = user;
