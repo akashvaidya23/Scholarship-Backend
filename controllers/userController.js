@@ -67,7 +67,7 @@ const getUserDetails = async (req, resp) => {
       return resp.status(500).json({ error: "Transaction start error" });
     }
     connection.query(
-      "SELECT id, name, aadhar, pan, email, mobile_no, username, role, department, year, gpa, skills, interests, achievements, created_at, updated_at FROM users where id = ?",
+      "SELECT id, name, aadhar, pan, email, mobile_no, username, role, department, year, gpa, skills, interests, achievements, caste, gender, category, specially_abled, family_income, created_at, updated_at FROM users where id = ?",
       id,
       (err, result) => {
         if (err) {
@@ -99,7 +99,12 @@ const getUserDetails = async (req, resp) => {
  */
 const handleCreateUser = async (req, resp) => {
   let data = req.body;
-  let hashedPassword = await bcrypt.hash(data.password, 10);
+  let hashedPassword;
+  if (data.password) {
+    hashedPassword = await bcrypt.hash(data.password, 10);
+  } else {
+    hashedPassword = await bcrypt.hash("12345", 10);
+  }
   data = { ...data, password: hashedPassword };
 
   connection.beginTransaction(async (err) => {
