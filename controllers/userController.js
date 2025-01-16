@@ -67,7 +67,7 @@ const getUserDetails = async (req, resp) => {
       return resp.status(500).json({ error: "Transaction start error" });
     }
     connection.query(
-      "SELECT id, name, aadhar, pan, email, mobile_no, username, role, department, year, gpa, skills, interests, achievements, caste, gender, category, specially_abled, family_income, created_at, updated_at FROM users where id = ?",
+      "SELECT id, name, aadhar, pan, email, mobile_no, username, role, department, year, gpa, skills, interests, achievements, caste, gender, category, specially_abled, family_income, verified, comments, created_at, updated_at FROM users where id = ?",
       id,
       (err, result) => {
         if (err) {
