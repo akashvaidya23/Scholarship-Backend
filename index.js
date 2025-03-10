@@ -26,19 +26,36 @@ app.use(express.urlencoded({ extended: false }));
 //     console.log("Mongo Connection failed ", err);
 //   });
 
+const corsOptions = {
+  origin: "*", // Adjust this for production
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+  allowedHeaders: "Content-Type, Authorization",
+};
+
 // Routes for CORS
+app.use(cors(corsOptions)); // Apply CORS globally
+
+// Handle preflight requests
+app.options("*", cors(corsOptions));
+
 app.use(
   cors({
-    origin: [`http://localhost:5173`, "http://localhost:8080/"],
+    origin: ["http://13.203.112.156:80/", "http://13.203.112.156:8080/"],
   })
 );
 
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://localhost:8080/"],
+    origin: ["http://13.203.112.156:80/", "http://13.203.112.156:8080/"],
     methods: ["GET", "POST"],
     credentials: true,
   })
 );
 
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  next();
+});
 app.use("/", userRouter);

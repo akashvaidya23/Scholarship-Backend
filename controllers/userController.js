@@ -285,14 +285,15 @@ const updateUser = async (req, resp) => {
           "UPDATE users SET ? WHERE id = ?",
           [updatedData, id],
           (updateErr, result) => {
+            console.log("updateErr ", updateErr);
             if (updateErr) {
               return connection.rollback(() => {
                 if (updateErr.code === "ER_DUP_ENTRY") {
                   return resp
                     .status(400)
-                    .json({ status: false, message: "User already exists" });
+                    .json({ status: false, message: updateErr });
                 }
-                console.log(updateErr);
+                // console.log(updateErr);
                 return resp
                   .status(500)
                   .json({ status: false, message: "Error updating user" });
